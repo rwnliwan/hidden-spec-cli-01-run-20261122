@@ -15,6 +15,7 @@
 |---|---|---|---|---|---|---|
 | v1 | 38,743 | 47,724 | 990 | 99/100 | u 30/30, s 20/20, v 20/20, j 14/15, c 15/15 | first full implementation: unified + search-replace + v4a + tiers + R rows |
 | v1.1 | 38,966 | 50,987 | 1000 | 100/100 | u 30/30, s 20/20, v 20/20, j 15/15, c 15/15 | fix j-array: JSON array form detected when first non-blank line *starts with* `[`, not only when it is exactly `[` (array may be one line `[{...},...]`). Re-run confirms 100/100, deterministic (second run also 100/100). |
+| v1.2 | 40,395 | 52,416 | 1000 | 100/100 | u 30/30, s 20/20, v 20/20, j 15/15, c 15/15 | reviser: 7 komentar dokumentasi baru saja (exit codes + atomicity, tier per-edit, occurrences per caller, CRLF str_replace, insert_line 0-based, cursor V4A maju saja, write loop), 23 insertions, 0 deletions, logika tidak berubah. Re-run confirms 100/100, deterministik (run ke-2 juga 100/100). |
 
 Notes:
 - v1 only miss was j-array (JSON array on a single line). Everything else passed first try, including all unified (u-offset/u-nearest wrong line numbers, u-rename move/R row, u-noeol), all search-replace (s-ambiguous, s-whitespace tier 2), all v4a (v-cursor, v-eof, v-move), and all cli (c-strict, c-check, c-usage, c-unsafe).
