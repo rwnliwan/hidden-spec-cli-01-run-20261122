@@ -18,6 +18,12 @@
 //
 // Node 22, standard library only. Deterministic: same exit code, stdout
 // and files on every run for the same patch and tree.
+//
+// Exit codes: 0 = every edit applied; 1 = at least one edit failed
+// (nothing written, the edits after the failure still ran); 2 = usage,
+// parse, no-patch or format error. All edits run against an in-memory
+// Tree and reach the disk only after every edit succeeded, so a failed
+// run leaves the tree on disk untouched — that is the all-or-nothing.
 
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -121,6 +127,9 @@ function lineEq(a: string, b: string, tier: number): boolean {
 }
 
 // All start positions in `lines` (from `from`) where `old` occurs at `tier`.
+// Callers decide what to do with several positions: unified takes the
+// one nearest the stated line, V4A takes the first at or after its
+// cursor, SEARCH/REPLACE fails when there is more than one.
 function occurrences(lines: string[], old: string[], tier: number, from: number): number[] {
   const out: number[] = [];
   const maxStart = lines.length - old.length;
@@ -139,6 +148,9 @@ function occurrences(lines: string[], old: string[], tier: number, from: number)
 
 // The first tier (0, then 1, then 2; only 0 when strict) that has an
 // occurrence of `old` at or after `from`, with all its positions.
+// The tier is chosen per edit, not per line: the first tier with any
+// occurrence wins, even when a looser tier has an occurrence nearer to
+// the stated position.
 function firstTier(
   lines: string[],
   old: string[],
@@ -786,6 +798,9 @@ function v4aUpdateEdit(path: string, moveTo: string | null, chunks: V4aChunk[], 
     if (cur === null) throw new Fail('missing', path);
     if (moveTo !== null && tree.get(moveTo) !== null) throw new Fail('exists', moveTo);
     const file = splitFile(cur);
+    // The cursor only moves forward: each chunk searches at or after
+    // it, so a patch cannot match the same region twice and chunks
+    // apply in the order they appear in the patch.
     let cursor = 0;
     for (const ch of chunks) {
       // Anchor: the first line at or after the cursor equal to the anchor
@@ -911,6 +926,9 @@ function jsonEdit(item: unknown, lineNo: number): Edit {
       if (!safe(path)) throw new Fail('unsafe', path);
       const cur = tree.get(path);
       if (cur === null) throw new Fail('missing', path);
+      // JSON str_replace works on the whole text, not on lines, so a
+      // CRLF file is normalised to LF for matching and counting, then
+      // converted back on write — the file keeps its own line breaks.
       const isCrlf = cur.includes('\r\n');
       const t = isCrlf ? cur.replace(/\r\n/g, '\n') : cur;
       const oldS = obj.old_str as string;
@@ -934,6 +952,8 @@ function jsonEdit(item: unknown, lineNo: number): Edit {
       const cur = tree.get(path);
       if (cur === null) throw new Fail('missing', path);
       const file = splitFile(cur);
+      // insert_line is 0-based: the new lines go before line `at`
+      // (0 = top of the file, lines.length = end of the file).
       const at = obj.insert_line as number;
       if (at < 0 || at > file.lines.length) throw new Fail('no-match', path);
       const ins = patchLines(obj.new_str as string);
@@ -1085,6 +1105,9 @@ function run(args: string[]): { code: number; out: string } {
   }
 
   const rows = outputRows(tree);
+  // Writes happen only here, after every edit succeeded: until this
+  // point the Tree is the only state, so a failed run (or --check)
+  // leaves the disk untouched.
   if (!check) {
     for (const p of tree.now.keys()) {
       const was = tree.original(p);
